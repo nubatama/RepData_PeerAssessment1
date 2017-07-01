@@ -5,10 +5,24 @@ output:
     keep_md: true
 ---
 
+## Loading necessary  libraries
+I use following lirbraries.  
+* dplyr
+* lubridate
+```{r}
+library(dplyr)
+library(lubridate)
+```
+
 
 ## Loading and preprocessing the data
+Loading surce data, and convert 'interval' value to time value.
 ```{r}
 activity_csv <- read.csv(unzip("activity.zip"))
+activity_csv <- mutate(activity_csv, time = sprintf("%02d:%02d", interval%/%100, interval%%100))
+activity_csv <- mutate(activity_csv, datetime_str = paste(activity_csv$date, " ", activity_csv$time))
+activity_csv <- mutate(activity_csv, 
+                       datetime = as.POSIXct(strptime(activity_csv$datetime_str, "%Y-%m-%d %H:%M")))
 str(activity_csv)
 head(activity_csv)
 summary(activity_csv)
@@ -17,14 +31,127 @@ summary(activity_csv)
 
 ## What is mean total number of steps taken per day?
 
+### Calculate total steps per day.
+Calculate total step per day, and show summary informations.
+```{r}
+# summarise data by day
+summarise_data <- group_by(activity_csv, date) %>% summarise(steps = sum(steps, na.rm = TRUE))
+str(summarise_data)
+summary(summarise_data)
+head(summarise_data)
+```
+
+### Show histgram of steps/day
+Show hishgram of steps/day by plot().
+```{r}
+hist(summarise_data$steps, 
+     breaks = 50,
+     xlab = "Toal steps per day", 
+     ylab = "Frequency", 
+     main = "Histgram of stpes/day")
+```
+
+### Calclurate mean and median of total steps/day
+Calculate and print mean value and median value of total steps/day.
+```{r}
+summary(summarise_data$steps)
+sprintf("median : %.3f", median(summarise_data$steps))
+sprintf("mean   : %.3f", mean(summarise_data$steps))
+```
 
 
 ## What is the average daily activity pattern?
+### Calculate average value
+Calculate average value, grouping by 'interval' column.
+And show summary informations.
+```{r}
+average_daily_data <- group_by(activity_csv, interval, time) %>% summarise(steps = mean(steps, na.rm = TRUE))
+str(average_daily_data)
+summary(average_daily_data)
+head(average_daily_data)
+```
 
+### Plot activity pattern
+Show line plot by plot().
+```{r}
+plot(x = average_daily_data$interval, y = average_daily_data$steps,
+     type = "l",
+     xlab = "the 5-minute interval",
+     ylab = "averaged across all days ",
+     main = "The average daily activity pattern"
+     )
+```
+
+Show interval that have maximum steps. 
+```{r}
+filter(average_daily_data, steps == max(average_daily_data$steps))
+```
 
 
 ## Imputing missing values
 
+### Compute missing value's count.
+Compute missing value's count.
+```{r}
+sum(is.na(activity_csv))
+```
+
+### Strategy for filling in all of the missing values in the dataset.
+I use mean value of all days (expect NA day) for substitution value of missing value.
+```{r}
+filling_data  <- group_by(activity_csv, date) 
+filling_data$steps[is.na(filling_data$steps)] = mean(filling_data$steps, na.rm = TRUE)
+summary(filling_data)
+```
+
+Show histgram based in filling missing values, and calculate median, mean, differences.
+```{r}
+summarise_data2 <- group_by(filling_data, date) %>% summarise(steps = sum(steps, na.rm = TRUE))
+hist(summarise_data2$steps, 
+     breaks = 50,
+     xlab = "Toal steps per day", 
+     ylab = "Frequency", 
+     main = "Histgram of stpes/day")
+
+summary(summarise_data2$steps)
+sprintf("median : %.3f", median(summarise_data2$steps))
+sprintf("mean   : %.3f", mean(summarise_data2$steps))
+sprintf("differ median : %.3f", median(summarise_data2$steps) - median(summarise_data$steps))
+sprintf("differ mean   : %.3f", mean(summarise_data2$steps) - mean(summarise_data$steps))
+```
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+Create new data.frame that have new  factor variable.
+```{r}
+activity_csv_w_weekday <- mutate(activity_csv, 
+                                 weekdays = factor(if_else(wday(activity_csv$datetime) %in% c(1,7), "weekdays", "weekends")))
+average_daily_data2 <- group_by(activity_csv_w_weekday, interval, time, weekdays) %>% summarise(steps = mean(steps, na.rm = TRUE))
+str(average_daily_data2)
+summary(average_daily_data2)
+head(average_daily_data2)
+```
+
+Plot line plot weekdays and weekends.
+```{r}
+step_data_weekdays <- filter(average_daily_data2, weekdays == "weekdays")
+step_data_weekends <- filter(average_daily_data2, weekdays == "weekends")
+plot(x = step_data_weekdays$interval, y = step_data_weekdays$steps, 
+     type = "l",
+     xlab = "the 5-minute interval",
+     ylab = "averaged across all days ",
+     main = "The average daily activity pattern", 
+     col = "red",
+     ylim = c(0, 300)
+     )
+par(new = T)
+plot(x = step_data_weekends$interval, y = step_data_weekends$steps, 
+     type = "l",
+     xlab = "the 5-minute interval",
+     ylab = "averaged across all days ",
+     main = "The average daily activity pattern", 
+     col = "blue",
+     ylim = c(0, 300)
+     )
+legend("topleft", legend=c("weekdays", "weekends"), lty=c(1, 1), col=c("red", "blue"))
+```
