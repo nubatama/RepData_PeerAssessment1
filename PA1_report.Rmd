@@ -1,0 +1,138 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+output: 
+  html_document:
+    keep_md: true
+---
+
+## Loading necessary  libraries
+```{r}
+library(dplyr)
+library(lubridate)
+```
+
+
+## Loading and preprocessing the data
+```{r}
+activity_csv <- read.csv(unzip("activity.zip"))
+activity_csv <- mutate(activity_csv, time = sprintf("%02d:%02d", interval%/%100, interval%%100))
+activity_csv <- mutate(activity_csv, datetime_str = paste(activity_csv$date, " ", activity_csv$time))
+activity_csv <- mutate(activity_csv, 
+                       datetime = as.POSIXct(strptime(activity_csv$datetime_str, "%Y-%m-%d %H:%M")))
+str(activity_csv)
+head(activity_csv)
+summary(activity_csv)
+```
+
+
+## What is mean total number of steps taken per day?
+
+### Calculate total steps per day.
+```{r}
+# summarise data by day
+summarise_data <- group_by(activity_csv, date) %>% summarise(steps = sum(steps, na.rm = TRUE))
+str(summarise_data)
+summary(summarise_data)
+head(summarise_data)
+```
+
+### Show histgram of steps/day
+```{r}
+hist(summarise_data$steps, 
+     breaks = 50,
+     xlab = "Toal steps per day", 
+     ylab = "Frequency", 
+     main = "Histgram of stpes/day")
+```
+
+### Calclurate mean and median of total steps/day
+```{r}
+summary(summarise_data$steps)
+sprintf("median : %.3f", median(summarise_data$steps))
+sprintf("mean   : %.3f", mean(summarise_data$steps))
+```
+
+
+## What is the average daily activity pattern?
+```{r}
+average_daily_data <- group_by(activity_csv, interval, time) %>% summarise(steps = mean(steps, na.rm = TRUE))
+str(average_daily_data)
+summary(average_daily_data)
+head(average_daily_data)
+```
+
+```{r}
+plot(x = average_daily_data$interval, y = average_daily_data$steps,
+     type = "l",
+     xlab = "the 5-minute interval",
+     ylab = "averaged across all days ",
+     main = "The average daily activity pattern"
+     )
+```
+
+```{r}
+filter(average_daily_data, steps == max(average_daily_data$steps))
+```
+
+
+## Imputing missing values
+
+### Compute missing value's count.
+```{r}
+sum(is.na(activity_csv))
+```
+
+### Strategy for filling in all of the missing values in the dataset.
+I use mean value of all days (expect NA day) for substitution value of missing value.
+```{r}
+filling_data  <- group_by(activity_csv, date) 
+filling_data$steps[is.na(filling_data$steps)] = mean(filling_data$steps, na.rm = TRUE)
+summary(filling_data)
+```
+
+```{r}
+summarise_data2 <- group_by(filling_data, date) %>% summarise(steps = sum(steps, na.rm = TRUE))
+hist(summarise_data2$steps, 
+     breaks = 50,
+     xlab = "Toal steps per day", 
+     ylab = "Frequency", 
+     main = "Histgram of stpes/day")
+
+summary(summarise_data2$steps)
+sprintf("median : %.3f", median(summarise_data2$steps))
+sprintf("mean   : %.3f", mean(summarise_data2$steps))
+sprintf("differ median : %.3f", median(summarise_data2$steps) - median(summarise_data$steps))
+sprintf("differ mean   : %.3f", mean(summarise_data2$steps) - mean(summarise_data$steps))
+```
+
+
+## Are there differences in activity patterns between weekdays and weekends?
+```{r}
+activity_csv_w_weekday <- mutate(activity_csv, 
+                                 weekdays = factor(if_else(wday(activity_csv$datetime) %in% c(1,7), "weekdays", "weekends")))
+average_daily_data2 <- group_by(activity_csv_w_weekday, interval, time, weekdays) %>% summarise(steps = mean(steps, na.rm = TRUE))
+str(average_daily_data2)
+summary(average_daily_data2)
+head(average_daily_data2)
+```
+
+```{r}
+step_data_weekdays <- filter(average_daily_data2, weekdays == "weekdays")
+step_data_weekends <- filter(average_daily_data2, weekdays == "weekends")
+plot(x = step_data_weekdays$interval, y = step_data_weekdays$steps, 
+     type = "l",
+     xlab = "the 5-minute interval",
+     ylab = "averaged across all days ",
+     main = "The average daily activity pattern", 
+     col = "red"
+     )
+par(new = T)
+plot(x = step_data_weekends$interval, y = step_data_weekends$steps, 
+     type = "l",
+     xlab = "the 5-minute interval",
+     ylab = "averaged across all days ",
+     main = "The average daily activity pattern", 
+     col = "blue"
+     )
+legend("topleft", legend=c("weekdays", "weekends"), lty=c(1, 1), col=c("red", "blue"))
+```
